@@ -17,6 +17,7 @@ import {
   Lock,
   LogOut,
   Power,
+  Gamepad2,
 } from "lucide-react";
 import DesktopIcon from "../components/desktop/DesktopIcon";
 import Window from "../components/desktop/Window";
@@ -26,6 +27,7 @@ import FileManagerApp from "../components/desktop/FileManagerApp";
 import NotepadApp from "../components/desktop/NotepadApp";
 import BrowserApp from "../components/desktop/BrowserApp";
 import IDEApp from "../components/desktop/IDEApp";
+import MiniGameApp from "../components/desktop/MiniGameApp";
 import ChatBot from "../components/portfolio/ChatBot";
 import AboutSection from "../components/portfolio/AboutSection";
 import ExperienceSection from "../components/portfolio/ExperienceSection";
@@ -132,6 +134,7 @@ const apps = [
       starterCode: "<?php\n\nfunction hello(): string {\n  return 'Hello from PhpStorm';\n}\n\necho hello();",
     },
   },
+  { id: "mini-game", icon: Gamepad2, label: "Mini Game", color: "bg-fuchsia-600", component: MiniGameApp },
   { id: "about", icon: User, label: "About Me", color: "bg-blue-500", component: AboutSection },
   { id: "experience", icon: Briefcase, label: "Experience", color: "bg-purple-500", component: ExperienceSection },
   { id: "skills", icon: Code2, label: "Skills", color: "bg-green-500", component: SkillsSection },
@@ -148,6 +151,9 @@ export default function Home() {
   const [sessionState, setSessionState] = useState("booting");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showStartMenu, setShowStartMenu] = useState(false);
+  const [desktopRefreshKey, setDesktopRefreshKey] = useState(0);
+  const [desktopFiles, setDesktopFiles] = useState(/** @type {{ id: string, label: string }[]} */ ([]));
+  const [desktopMenu, setDesktopMenu] = useState({ visible: false, x: 0, y: 0 });
   const [systemSettings, setSystemSettings] = useState({
     wallpaper: "nebula",
     accentColor: "#06b6d4",
@@ -185,6 +191,23 @@ export default function Home() {
 
     return undefined;
   }, [sessionState]);
+
+  useEffect(() => {
+    const closeDesktopMenu = () => setDesktopMenu((prev) => ({ ...prev, visible: false }));
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        closeDesktopMenu();
+      }
+    };
+
+    window.addEventListener("click", closeDesktopMenu);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("click", closeDesktopMenu);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
 
   const openApp = (/** @type {string} */ appId) => {
     if (!isAuthenticated || sessionState !== "on") return;
@@ -258,6 +281,54 @@ export default function Home() {
 
   const handleSettingsChange = (/** @type {Partial<typeof systemSettings>} */ nextSettings) => {
     setSystemSettings((prev) => ({ ...prev, ...nextSettings }));
+  };
+
+  const handleTaskbarSearch = (/** @type {string} */ query) => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return;
+
+    const matchedApp = apps.find((app) => app.label.toLowerCase().includes(normalized));
+    if (matchedApp) {
+      openApp(matchedApp.id);
+    }
+  };
+
+  const handleDesktopContextMenu = (event) => {
+    if (!isAuthenticated || sessionState !== "on") return;
+
+    const target = /** @type {HTMLElement} */ (event.target);
+    if (target.closest("[data-window-root='true']") || target.closest("[data-taskbar-root='true']")) {
+      return;
+    }
+
+    event.preventDefault();
+    setShowStartMenu(false);
+    setDesktopMenu({
+      visible: true,
+      x: Math.min(event.clientX, window.innerWidth - 170),
+      y: Math.min(event.clientY, window.innerHeight - 170),
+    });
+  };
+
+  const handleDesktopRefresh = () => {
+    setDesktopRefreshKey((prev) => prev + 1);
+    setDesktopMenu((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleCreateNewFile = () => {
+    setDesktopFiles((prev) => [
+      ...prev,
+      {
+        id: `file-${Date.now()}`,
+        label: `New File ${prev.length + 1}.txt`,
+      },
+    ]);
+    setDesktopMenu((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleOpenSettings = () => {
+    openApp("settings");
+    setDesktopMenu((prev) => ({ ...prev, visible: false }));
   };
 
   const desktopDate = new Date().toLocaleDateString("en-US", {
@@ -334,7 +405,7 @@ export default function Home() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
+    <div className="relative min-h-screen overflow-hidden" onContextMenu={handleDesktopContextMenu}>
       <div className={`fixed inset-0 ${WALLPAPER_STYLES[systemSettings.wallpaper]}`}>
         <motion.div
           animate={
@@ -367,7 +438,7 @@ export default function Home() {
         <p className="text-sm text-white/70 drop-shadow-lg mt-1">Double-click apps to explore</p>
       </motion.div>
 
-      <div className="fixed top-32 left-6 md:left-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 z-10 max-w-[90vw]">
+      <div key={desktopRefreshKey} className="fixed top-32 left-6 md:left-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 z-10 max-w-[90vw]">
         {apps.map((app, index) => (
           <motion.div
             key={app.id}
@@ -376,6 +447,24 @@ export default function Home() {
             transition={{ delay: systemSettings.animationsEnabled ? index * 0.1 : 0, duration: 0.5 }}
           >
             <DesktopIcon icon={app.icon} label={app.label} color={app.color} onClick={() => openApp(app.id)} />
+          </motion.div>
+        ))}
+        {desktopFiles.map((file, index) => (
+          <motion.div
+            key={file.id}
+            initial={systemSettings.animationsEnabled ? { opacity: 0, x: -50 } : { opacity: 1, x: 0 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{
+              delay: systemSettings.animationsEnabled ? (apps.length + index) * 0.08 : 0,
+              duration: 0.4,
+            }}
+          >
+            <DesktopIcon
+              icon={FileText}
+              label={file.label}
+              color="bg-slate-600"
+              onClick={() => openApp("notepad")}
+            />
           </motion.div>
         ))}
       </div>
@@ -412,6 +501,74 @@ export default function Home() {
       </AnimatePresence>
 
       <AnimatePresence>{chatOpen && <ChatBot onClose={() => setChatOpen(false)} />}</AnimatePresence>
+
+      <div className="fixed right-4 bottom-16 z-[65] pointer-events-none">
+        <motion.div
+          animate={{
+            rotate: [0, 16, -12, 10, -8, 0],
+            y: [0, -4, 0],
+          }}
+          transition={{
+            rotate: { duration: 1.4, repeat: Infinity, repeatDelay: 1 },
+            y: { duration: 1.8, repeat: Infinity, ease: "easeInOut" },
+          }}
+          className="text-4xl select-none"
+          aria-hidden="true"
+        >
+          🐭
+        </motion.div>
+
+        <motion.div
+          animate={{
+            opacity: [0, 1, 1, 0],
+            y: [8, 0, 0, -6],
+          }}
+          transition={{
+            duration: 5.2,
+            repeat: Infinity,
+            repeatDelay: 0.4,
+            ease: "easeInOut",
+          }}
+          className="absolute bottom-12 right-0 w-64 rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 shadow-xl"
+        >
+          hi Im nhlanhla a full stack developer and a system engineer nice to meet you
+        </motion.div>
+      </div>
+
+      <AnimatePresence>
+        {desktopMenu.visible && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed z-[70] w-40 rounded-lg border border-slate-700 bg-slate-900/95 p-1 shadow-2xl"
+            style={{ left: desktopMenu.x, top: desktopMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={handleDesktopRefresh}
+              className="w-full text-left px-3 py-2 rounded-md text-sm text-white hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateNewFile}
+              className="w-full text-left px-3 py-2 rounded-md text-sm text-white hover:bg-slate-800"
+            >
+              New File
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              className="w-full text-left px-3 py-2 rounded-md text-sm text-white hover:bg-slate-800"
+            >
+              Settings
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showStartMenu && (
@@ -483,6 +640,13 @@ export default function Home() {
                 <Code2 className="w-4 h-4" />
                 PhpStorm
               </button>
+              <button
+                onClick={() => openApp("mini-game")}
+                className="w-full text-left px-3 py-2 rounded-lg text-white hover:bg-slate-800 flex items-center gap-2"
+              >
+                <Gamepad2 className="w-4 h-4" />
+                Mini Game
+              </button>
               <div className="h-px bg-slate-700 my-2" />
               <button
                 onClick={handleLock}
@@ -518,6 +682,7 @@ export default function Home() {
         onPowerClick={handleShutdown}
         currentTime={currentTime}
         accentColor={systemSettings.accentColor}
+        onAppSearch={handleTaskbarSearch}
       />
     </div>
   );

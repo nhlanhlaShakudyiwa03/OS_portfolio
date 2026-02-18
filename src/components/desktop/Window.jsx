@@ -22,6 +22,7 @@ export default function Window({
 
   return (
     <motion.div
+      data-window-root="true"
       drag={!isMaximized}
       dragMomentum={false}
       initial={initialPosition}
