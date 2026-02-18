@@ -48,8 +48,6 @@ import ContactSection from "../components/portfolio/ContactSection";
  * @typedef {DesktopApp & { zIndex: number, position: { x: number, y: number } }} AppWindow
  */
 
-const DEMO_USERNAME = "admin";
-const DEMO_PASSWORD = "portfolio";
 const WALLPAPER_STYLES = {
   nebula: "bg-gradient-to-br from-blue-900 via-purple-900 to-pink-900",
   sunset: "bg-gradient-to-br from-orange-900 via-amber-700 to-rose-500",
@@ -150,9 +148,6 @@ export default function Home() {
   const [sessionState, setSessionState] = useState("booting");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showStartMenu, setShowStartMenu] = useState(false);
-  const [username, setUsername] = useState(DEMO_USERNAME);
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
   const [systemSettings, setSystemSettings] = useState({
     wallpaper: "nebula",
     accentColor: "#06b6d4",
@@ -232,9 +227,6 @@ export default function Home() {
 
   const handlePowerOn = () => {
     setSessionState("booting");
-    setUsername(DEMO_USERNAME);
-    setPassword("");
-    setLoginError("");
   };
 
   const handleShutdown = () => {
@@ -243,9 +235,6 @@ export default function Home() {
     setOpenWindows([]);
     setSessionState("shutting_down");
     setIsAuthenticated(false);
-    setUsername(DEMO_USERNAME);
-    setPassword("");
-    setLoginError("");
   };
 
   const handleLock = () => {
@@ -253,9 +242,6 @@ export default function Home() {
     setChatOpen(false);
     setSessionState("on");
     setIsAuthenticated(false);
-    setUsername(DEMO_USERNAME);
-    setPassword("");
-    setLoginError("");
   };
 
   const handleSignOut = () => {
@@ -264,22 +250,10 @@ export default function Home() {
     setOpenWindows([]);
     setSessionState("on");
     setIsAuthenticated(false);
-    setUsername(DEMO_USERNAME);
-    setPassword("");
-    setLoginError("");
   };
 
-  const handleLogin = (event) => {
-    event.preventDefault();
-
-    if (username.trim().toLowerCase() === DEMO_USERNAME && password === DEMO_PASSWORD) {
-      setIsAuthenticated(true);
-      setLoginError("");
-      setPassword("");
-      return;
-    }
-
-    setLoginError("Invalid credentials. Use admin / portfolio.");
+  const handleSignIn = () => {
+    setIsAuthenticated(true);
   };
 
   const handleSettingsChange = (/** @type {Partial<typeof systemSettings>} */ nextSettings) => {
@@ -335,38 +309,17 @@ export default function Home() {
             <p className="text-white/85">{desktopDate}</p>
           </div>
 
-          <form
-            onSubmit={handleLogin}
-            className="w-full max-w-sm bg-slate-900/75 border border-slate-700 rounded-2xl p-6 backdrop-blur-xl"
-          >
+          <div className="w-full max-w-sm bg-slate-900/75 border border-slate-700 rounded-2xl p-6 backdrop-blur-xl">
             <h2 className="text-xl text-white font-semibold mb-4">Sign in</h2>
-            <div className="space-y-3">
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username"
-                className="w-full px-3 py-2 rounded-lg bg-slate-800 text-white border border-slate-600 outline-none"
-                style={{ borderColor: systemSettings.accentColor }}
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full px-3 py-2 rounded-lg bg-slate-800 text-white border border-slate-600 outline-none"
-                style={{ borderColor: systemSettings.accentColor }}
-              />
-            </div>
-            {loginError && <p className="text-red-300 text-sm mt-3">{loginError}</p>}
-            <p className="text-slate-300 text-xs mt-3">Demo login: admin / portfolio</p>
             <button
-              type="submit"
+              type="button"
+              onClick={handleSignIn}
               className="w-full mt-4 px-4 py-2 rounded-lg text-white transition-colors"
               style={{ backgroundColor: systemSettings.accentColor }}
             >
-              Login
+              Sign In
             </button>
-          </form>
+          </div>
 
           <button
             onClick={handleShutdown}
