@@ -57,7 +57,7 @@ export default function ContactSection() {
             <span className="text-slate-600">together.</span>
           </h2>
           <p className="text-slate-600 text-sm max-w-md mx-auto">
-            I'm always open to new opportunities, collaborations, and conversations.
+            I'm open to new opportunities, collaborations, and conversations.
             Feel free to reach out.
           </p>
         </motion.div>
