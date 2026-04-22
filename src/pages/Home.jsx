@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User,
@@ -7,7 +7,6 @@ import {
   Globe,
   Flame,
   Cpu,
-  Terminal,
   FolderGit2,
   FolderOpen,
   FileText,
@@ -35,6 +34,7 @@ import SkillsSection from "../components/portfolio/SkillsSection";
 import ProjectsSection from "../components/portfolio/ProjectsSection";
 import EducationSection from "../components/portfolio/EducationSection";
 import ContactSection from "../components/portfolio/ContactSection";
+import { advancedApps } from "@/lib/os-apps";
 
 /**
  * @typedef {object} DesktopApp
@@ -57,7 +57,7 @@ const WALLPAPER_STYLES = {
 };
 
 /** @type {DesktopApp[]} */
-const apps = [
+const baseApps = [
   { id: "settings", icon: Settings, label: "Settings", color: "bg-slate-600", component: SettingsApp },
   { id: "file-manager", icon: FolderOpen, label: "File Manager", color: "bg-yellow-500", component: FileManagerApp },
   { id: "notepad", icon: FileText, label: "Notepad", color: "bg-slate-500", component: NotepadApp },
@@ -98,18 +98,6 @@ const apps = [
     },
   },
   {
-    id: "vscode",
-    icon: Terminal,
-    label: "VS Code",
-    color: "bg-indigo-600",
-    component: IDEApp,
-    props: {
-      ideName: "Visual Studio Code",
-      projectName: "portfolio-os",
-      starterCode: "function welcome() {\n  console.log('Welcome to VS Code');\n}\n\nwelcome();",
-    },
-  },
-  {
     id: "visual-studio",
     icon: Cpu,
     label: "Visual Studio",
@@ -122,18 +110,6 @@ const apps = [
         "using System;\n\nclass Program {\n  static void Main() {\n    Console.WriteLine(\"Hello from Visual Studio\");\n  }\n}",
     },
   },
-  {
-    id: "phpstorm",
-    icon: Code2,
-    label: "PhpStorm",
-    color: "bg-emerald-600",
-    component: IDEApp,
-    props: {
-      ideName: "PhpStorm",
-      projectName: "portfolio-api",
-      starterCode: "<?php\n\nfunction hello(): string {\n  return 'Hello from PhpStorm';\n}\n\necho hello();",
-    },
-  },
   { id: "mini-game", icon: Gamepad2, label: "Mini Game", color: "bg-fuchsia-600", component: MiniGameApp },
   { id: "about", icon: User, label: "About Me", color: "bg-blue-500", component: AboutSection },
   { id: "experience", icon: Briefcase, label: "Experience", color: "bg-purple-500", component: ExperienceSection },
@@ -143,6 +119,47 @@ const apps = [
   { id: "contact", icon: Mail, label: "Contact", color: "bg-cyan-500", component: ContactSection },
 ];
 
+/** @type {DesktopApp[]} */
+const apps = [...baseApps, ...advancedApps];
+
+const ABOUT_LINES = [
+  "Full Stack Developer building secure, scalable applications.",
+  "I integrate web platforms, APIs, and embedded systems.",
+  "I turn complex problems into practical, reliable solutions.",
+  "Open to impactful software engineering opportunities.",
+];
+
+const TOP_APP_ORDER = ["about", "hire-me", "skills", "contact", "projects", "experience", "education", "cv-app"];
+
+const DESKTOP_ICON_WIDTH = 96;
+const DESKTOP_ICON_HEIGHT = 120;
+const DESKTOP_ICON_GAP = 16;
+const DESKTOP_ICON_START_X = 24;
+const DESKTOP_ICON_START_Y = 128;
+const TASKBAR_HEIGHT = 48;
+
+function getDesktopIconColumns(width) {
+  if (width >= 1024) return 4;
+  if (width >= 768) return 3;
+  return 2;
+}
+
+function getDefaultDesktopIconPosition(index, columns) {
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+  return {
+    x: DESKTOP_ICON_START_X + col * (DESKTOP_ICON_WIDTH + DESKTOP_ICON_GAP),
+    y: DESKTOP_ICON_START_Y + row * (DESKTOP_ICON_HEIGHT + DESKTOP_ICON_GAP),
+  };
+}
+
+function buildDefaultDesktopIconPositions(iconItems, columns) {
+  return iconItems.reduce((acc, item, index) => {
+    acc[item.key] = getDefaultDesktopIconPosition(index, columns);
+    return acc;
+  }, {});
+}
+
 export default function Home() {
   const [openWindows, setOpenWindows] = useState(/** @type {AppWindow[]} */ ([]));
   const [highestZIndex, setHighestZIndex] = useState(10);
@@ -151,15 +168,60 @@ export default function Home() {
   const [sessionState, setSessionState] = useState("booting");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showStartMenu, setShowStartMenu] = useState(false);
-  const [desktopRefreshKey, setDesktopRefreshKey] = useState(0);
   const [desktopFiles, setDesktopFiles] = useState(/** @type {{ id: string, label: string }[]} */ ([]));
   const [desktopMenu, setDesktopMenu] = useState({ visible: false, x: 0, y: 0 });
+  const [aboutLineIndex, setAboutLineIndex] = useState(0);
+  const [typedAboutLine, setTypedAboutLine] = useState("");
+  const [isDeletingAboutLine, setIsDeletingAboutLine] = useState(false);
+  const [iconColumns, setIconColumns] = useState(() => getDesktopIconColumns(window.innerWidth));
+  const [iconPositions, setIconPositions] = useState({});
+  const [hasManualIconLayout, setHasManualIconLayout] = useState(false);
+  const dragClickSuppressUntilRef = useRef(0);
   const [systemSettings, setSystemSettings] = useState({
     wallpaper: "nebula",
     accentColor: "#06b6d4",
     animationsEnabled: true,
     use24HourClock: false,
   });
+
+  const desktopAppItems = useMemo(() => {
+    const rankFor = (id) => {
+      const index = TOP_APP_ORDER.indexOf(id);
+      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    };
+
+    return apps
+      .map((app, index) => ({
+        key: `app:${app.id}`,
+        type: "app",
+        id: app.id,
+        icon: app.icon,
+        label: app.label,
+        color: app.color,
+        _index: index,
+      }))
+      .sort((a, b) => {
+        const rankDiff = rankFor(a.id) - rankFor(b.id);
+        if (rankDiff !== 0) return rankDiff;
+        return a._index - b._index;
+      })
+      .map(({ _index, ...item }) => item);
+  }, []);
+
+  const desktopIconItems = useMemo(
+    () => [
+      ...desktopAppItems,
+      ...desktopFiles.map((file) => ({
+        key: `file:${file.id}`,
+        type: "file",
+        id: file.id,
+        icon: FileText,
+        label: file.label,
+        color: "bg-slate-600",
+      })),
+    ],
+    [desktopAppItems, desktopFiles]
+  );
 
   useEffect(() => {
     const updateTime = () => {
@@ -208,6 +270,89 @@ export default function Home() {
       window.removeEventListener("keydown", handleEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || sessionState !== "on") return undefined;
+
+    const currentLine = ABOUT_LINES[aboutLineIndex];
+    const isDoneTyping = typedAboutLine === currentLine;
+    const isFullyDeleted = typedAboutLine.length === 0;
+
+    let delay = isDeletingAboutLine ? 36 : 52;
+    if (!isDeletingAboutLine && isDoneTyping) delay = 1800;
+    if (isDeletingAboutLine && isFullyDeleted) delay = 320;
+
+    const timer = setTimeout(() => {
+      if (!isDeletingAboutLine && isDoneTyping) {
+        setIsDeletingAboutLine(true);
+        return;
+      }
+
+      if (isDeletingAboutLine && isFullyDeleted) {
+        setIsDeletingAboutLine(false);
+        setAboutLineIndex((prev) => (prev + 1) % ABOUT_LINES.length);
+        return;
+      }
+
+      const nextLength = typedAboutLine.length + (isDeletingAboutLine ? -1 : 1);
+      setTypedAboutLine(currentLine.slice(0, nextLength));
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [aboutLineIndex, isAuthenticated, isDeletingAboutLine, sessionState, typedAboutLine]);
+
+  useEffect(() => {
+    const handleResize = () => setIconColumns(getDesktopIconColumns(window.innerWidth));
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    setIconPositions((prev) => {
+      if (!hasManualIconLayout) {
+        return buildDefaultDesktopIconPositions(desktopIconItems, iconColumns);
+      }
+
+      const next = { ...prev };
+      const activeKeys = new Set(desktopIconItems.map((item) => item.key));
+
+      desktopIconItems.forEach((item, index) => {
+        if (!next[item.key]) {
+          next[item.key] = getDefaultDesktopIconPosition(index, iconColumns);
+        }
+      });
+
+      Object.keys(next).forEach((key) => {
+        if (!activeKeys.has(key)) delete next[key];
+      });
+
+      return next;
+    });
+  }, [desktopIconItems, hasManualIconLayout, iconColumns]);
+
+  const clampIconPosition = (position) => {
+    const minX = 8;
+    const minY = 96;
+    const maxX = Math.max(minX, window.innerWidth - DESKTOP_ICON_WIDTH - 8);
+    const maxY = Math.max(minY, window.innerHeight - TASKBAR_HEIGHT - DESKTOP_ICON_HEIGHT - 8);
+    return {
+      x: Math.min(maxX, Math.max(minX, position.x)),
+      y: Math.min(maxY, Math.max(minY, position.y)),
+    };
+  };
+
+  const handleIconDragEnd = (iconKey, offset) => {
+    dragClickSuppressUntilRef.current = Date.now() + 180;
+    setHasManualIconLayout(true);
+    setIconPositions((prev) => {
+      const current = prev[iconKey] ?? { x: DESKTOP_ICON_START_X, y: DESKTOP_ICON_START_Y };
+      const next = clampIconPosition({
+        x: current.x + offset.x,
+        y: current.y + offset.y,
+      });
+      return { ...prev, [iconKey]: next };
+    });
+  };
 
   const openApp = (/** @type {string} */ appId) => {
     if (!isAuthenticated || sessionState !== "on") return;
@@ -311,7 +456,8 @@ export default function Home() {
   };
 
   const handleDesktopRefresh = () => {
-    setDesktopRefreshKey((prev) => prev + 1);
+    setHasManualIconLayout(false);
+    setIconPositions(buildDefaultDesktopIconPositions(desktopIconItems, iconColumns));
     setDesktopMenu((prev) => ({ ...prev, visible: false }));
   };
 
@@ -329,6 +475,15 @@ export default function Home() {
   const handleOpenSettings = () => {
     openApp("settings");
     setDesktopMenu((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleDesktopIconClick = (item) => {
+    if (Date.now() < dragClickSuppressUntilRef.current) return;
+    if (item.type === "app") {
+      openApp(item.id);
+      return;
+    }
+    openApp("notepad");
   };
 
   const desktopDate = new Date().toLocaleDateString("en-US", {
@@ -438,36 +593,55 @@ export default function Home() {
         <p className="text-sm text-white/70 drop-shadow-lg mt-1">Double-click apps to explore</p>
       </motion.div>
 
-      <div key={desktopRefreshKey} className="fixed top-32 left-6 md:left-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 z-10 max-w-[90vw]">
-        {apps.map((app, index) => (
+      <motion.div
+        initial={systemSettings.animationsEnabled ? { opacity: 0, y: 20 } : { opacity: 1, y: 0 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35, duration: 0.7 }}
+        className="fixed left-[44%] top-[46%] hidden lg:block z-10 max-w-xl rounded-2xl border border-white/15 bg-slate-950/35 p-5 backdrop-blur-md"
+      >
+        <p className="text-xs uppercase tracking-[0.2em] text-cyan-300/85">About Me</p>
+        <p className="mt-3 min-h-[56px] text-xl font-medium text-white leading-relaxed">
+          {typedAboutLine}
+          <span className="ml-0.5 inline-block h-6 w-[2px] bg-cyan-300 align-[-3px] animate-pulse" />
+        </p>
+      </motion.div>
+
+      {desktopIconItems.map((item, index) => {
+        const position = iconPositions[item.key] ?? getDefaultDesktopIconPosition(index, iconColumns);
+
+        return (
           <motion.div
-            key={app.id}
-            initial={systemSettings.animationsEnabled ? { opacity: 0, x: -50 } : { opacity: 1, x: 0 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: systemSettings.animationsEnabled ? index * 0.1 : 0, duration: 0.5 }}
-          >
-            <DesktopIcon icon={app.icon} label={app.label} color={app.color} onClick={() => openApp(app.id)} />
-          </motion.div>
-        ))}
-        {desktopFiles.map((file, index) => (
-          <motion.div
-            key={file.id}
-            initial={systemSettings.animationsEnabled ? { opacity: 0, x: -50 } : { opacity: 1, x: 0 }}
-            animate={{ opacity: 1, x: 0 }}
+            key={item.key}
+            drag
+            dragMomentum={false}
+            dragElastic={0}
+            whileDrag={{ scale: 1.03 }}
+            initial={
+              systemSettings.animationsEnabled
+                ? { opacity: 0, x: position.x - 28, y: position.y }
+                : { opacity: 1, x: position.x, y: position.y }
+            }
+            animate={{ opacity: 1, x: position.x, y: position.y }}
             transition={{
-              delay: systemSettings.animationsEnabled ? (apps.length + index) * 0.08 : 0,
-              duration: 0.4,
+              delay: systemSettings.animationsEnabled ? index * 0.05 : 0,
+              duration: 0.28,
             }}
+            onDragStart={() => {
+              setShowStartMenu(false);
+              setDesktopMenu((prev) => ({ ...prev, visible: false }));
+            }}
+            onDragEnd={(_, info) => handleIconDragEnd(item.key, info.offset)}
+            className="fixed top-0 left-0 z-10 cursor-grab active:cursor-grabbing touch-none"
           >
             <DesktopIcon
-              icon={FileText}
-              label={file.label}
-              color="bg-slate-600"
-              onClick={() => openApp("notepad")}
+              icon={item.icon}
+              label={item.label}
+              color={item.color}
+              onClick={() => handleDesktopIconClick(item)}
             />
           </motion.div>
-        ))}
-      </div>
+        );
+      })}
 
       <AnimatePresence>
         {openWindows.map((appWindow) => {
@@ -620,25 +794,11 @@ export default function Home() {
                 Firefox
               </button>
               <button
-                onClick={() => openApp("vscode")}
-                className="w-full text-left px-3 py-2 rounded-lg text-white hover:bg-slate-800 flex items-center gap-2"
-              >
-                <Terminal className="w-4 h-4" />
-                VS Code
-              </button>
-              <button
                 onClick={() => openApp("visual-studio")}
                 className="w-full text-left px-3 py-2 rounded-lg text-white hover:bg-slate-800 flex items-center gap-2"
               >
                 <Cpu className="w-4 h-4" />
                 Visual Studio
-              </button>
-              <button
-                onClick={() => openApp("phpstorm")}
-                className="w-full text-left px-3 py-2 rounded-lg text-white hover:bg-slate-800 flex items-center gap-2"
-              >
-                <Code2 className="w-4 h-4" />
-                PhpStorm
               </button>
               <button
                 onClick={() => openApp("mini-game")}

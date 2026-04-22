@@ -36,7 +36,7 @@ export default function AboutSection() {
           transition={{ duration: 0.7, delay: 0.15 }}
           className="text-slate-600 text-base md:text-lg leading-relaxed max-w-3xl mb-16"
         >
-          Computer Systems Engineering (ICT) graduate and Full Stack Developer with hands-on
+          Computer Systems Engineering (ICT) graduate and Software developer (Full Stack Developer) with hands-on
           experience in software development, embedded systems, networking, and system integration.
           Passionate about applying technical knowledge to solve real-world problems and contribute
           to innovative software development. Experienced with enterprise platforms including Jira,
